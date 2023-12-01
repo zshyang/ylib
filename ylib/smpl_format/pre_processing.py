@@ -8,11 +8,15 @@ logs
     2023-09-25
         file created
 '''
+from typing import List
+
+import numpy as np
 import torch
 
 from ..quaternion import qinv  # ==============================================
 from ..quaternion import qrot  # ==============================================
 from ..skeleton import Skeleton  # ============================================
+from ..skeleton import make_joints_face_z  # ==================================
 from ..skeleton_prior import smpl_22_face_joint_indx  # =======================
 from ..skeleton_prior import t2m_kinematic_chain  # ===========================
 from ..skeleton_prior import t2m_raw_offsets  # ===============================
@@ -140,3 +144,53 @@ def get_quaternion_with_skel(
         positions.numpy(), face_joint_index, smooth_forward=False
     )
     return quat_params, skel
+
+
+def _put_on_floor(positions: np.ndarray) -> np.ndarray:
+    '''
+    put the positions on the floor
+
+    inputs:
+    -------
+    positions (num_frames, joints_num, 3)
+        the positions of the joints
+    '''
+    floor_height = positions.min(axis=0).min(axis=0)[1]
+    positions[:, :, 1] = positions[:, :, 1] - floor_height
+    return positions
+
+
+def _put_xz_at_origin(positions: np.ndarray) -> np.ndarray:
+    '''
+    put the positions on the floor
+
+    inputs:
+    -------
+    positions (num_frames, joints_num, 3)
+        the positions of the joints
+    '''
+    root_pos_init = positions[0][0]  # first frame and root joint
+    root_pose_init_xz = root_pos_init * np.array([1, 0, 1])
+    positions = positions - root_pose_init_xz
+    return positions
+
+
+def preprocess_joints(
+    positions: np.ndarray, face_joint_indx: List[int]
+) -> np.ndarray:
+    '''
+    preprocess the joints to put the positions on the floor, xz at origin, and 
+    face z+.
+    '''
+    # Put on Floor
+    positions = _put_on_floor(positions)
+
+    # XZ at origin
+    positions = _put_xz_at_origin(positions)
+
+    # all initially face Z+
+    positions = make_joints_face_z(
+        face_joint_indx, torch.tensor(positions).float()
+    ).numpy()
+
+    return positions

@@ -6,11 +6,32 @@ logs
     2023-09-18
         file created
 '''
+from typing import List
+
 import numpy as np
 import torch
 from ylib.quaternion import qbetween_np, qinv_np, qmul_np, qrot_np
 
 from .quaternion import cont6d_to_matrix, qbetween, qrot
+
+
+def compute_offset_from_joints(
+    joints: np.ndarray, parents: List[int]
+) -> np.ndarray:
+    '''
+    compute the offset from the joints
+
+    inputs:
+    -------
+    joints: np.ndarray
+        the joints position, shape: (num_joints, 3)
+    '''
+    offset = np.zeros_like(joints)
+    for i, parent in enumerate(parents):
+        if parent == -1:
+            continue
+        offset[i] = joints[i] - joints[parent]
+    return offset
 
 
 def normlize_np(vector):
@@ -158,6 +179,8 @@ def make_joints_face_z(face_joint_index, joints: torch.tensor) -> torch.tensor:
     '''
     # forward : (batch_size, 3)
     forward = compute_forward(face_joint_index, joints)
+    # here is a bug, I forgot to make all the motion face towards z+ direction
+    forward[1:] = forward[:1]
 
     # target : [1, 3]
     target = torch.tensor([[0, 0, 1]], dtype=torch.float32).to(joints.device)
@@ -228,7 +251,7 @@ class Skeleton:
         '''
         assert len(face_joint_idx) == 4
         '''Get Forward Direction'''
-        l_hip, r_hip, sdr_r, sdr_l = face_joint_idx
+        r_hip, l_hip, sdr_r, sdr_l = face_joint_idx
         across1 = joints[:, r_hip] - joints[:, l_hip]
         across2 = joints[:, sdr_r] - joints[:, sdr_l]
         across = across1 + across2
@@ -263,6 +286,20 @@ class Skeleton:
                 u = self._raw_offset_np[chain[j+1]][np.newaxis, ...].repeat(
                     len(joints), axis=0
                 )
+                if np.allclose(
+                    (
+                        (
+                            self._raw_offset_np[chain[j+1]] * 100000
+                        ).astype(np.int32) / 100000).astype(np.float32),
+                    np.zeros(3)
+                ):
+                    # R_loc = qinv_np(R)
+                    quat_params[:, chain[j + 1], :] = np.array(
+                        [[1.0, 0.0, 0.0, 0.0]]
+                    )
+                    # R = qmul_np(R, R_loc)
+                    continue
+
                 # print(u.shape)
                 # (batch, 3)
                 v = joints[:, chain[j+1]] - joints[:, chain[j]]

@@ -8,30 +8,32 @@ logs
 '''
 import numpy as np
 
+# ================================== SMPL 22 ==================================
+# parents | offsets | kinematic_chain | face_joint_index | key_joint_index
+# ee_idx
 smpl_22_parents = [
     # 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
     -1,  0, 0, 0, 1, 2, 3, 4, 5, 6,  7,  8,  9,  9,  9, 12, 13, 14, 16, 17, 18, 19,
 ]
 
-
 t2m_raw_offsets = np.array(
     [
-        [0, 0, 0],
-        [1, 0, 0],
+        [0,  0, 0],
+        [1,  0, 0],
         [-1, 0, 0],
-        [0, 1, 0],
+        [0,  1, 0],
         [0, -1, 0],
         [0, -1, 0],
-        [0, 1, 0],
+        [0,  1, 0],
         [0, -1, 0],
         [0, -1, 0],
-        [0, 1, 0],
-        [0, 0, 1],
-        [0, 0, 1],
-        [0, 1, 0],
-        [1, 0, 0],
+        [0,  1, 0],
+        [0,  0, 1],
+        [0,  0, 1],
+        [0,  1, 0],
+        [1,  0, 0],
         [-1, 0, 0],
-        [0, 0, 1],
+        [0,  0, 1],
         [0, -1, 0],
         [0, -1, 0],
         [0, -1, 0],
@@ -42,14 +44,24 @@ t2m_raw_offsets = np.array(
 )
 
 t2m_kinematic_chain = [
-    [0, 2, 5, 8, 11], [0, 1, 4, 7, 10],
-    [0, 3, 6, 9, 12, 15], [9, 14, 17, 19, 21], [9, 13, 16, 18, 20]
+    [0,      2,  5,  8, 11],  # root -> right leg
+    [0,      1,  4,  7, 10],  # root -> left leg
+    [0,  3,  6,  9, 12, 15],  # root -> head
+    [9,     14, 17, 19, 21],  # head -> R_Wrist
+    [9,     13, 16, 18, 20],  # head -> L_Wrist
 ]
 
 # r_hip, l_hip, r_shoulder, l_shoulder
 smpl_22_face_joint_indx = [2, 1, 17, 16]
 
+#                   root, LFoot, RFoot, head, L_Wrist, R_Wrist, Spine3
+smpl_key_joint_index = [0,   10,    11,   15,      20,      21,      9]
 
+smpl_ee_idx = [11, 10, 15, 21, 20]
+
+# ================================== SMAL 35 ==================================
+# parents | kinematic_chain | face_joint_index | key_joint_index
+# ee_idx  |
 smal_35_parents = [
     -1,  0,  1,  2,  3,
     4,   5,  6,  7,  8,
@@ -59,6 +71,25 @@ smal_35_parents = [
     0,  25, 26, 27, 28,
     29, 30, 16, 16, 16
 ]
+
+smal_35_kinematic_chain = [
+    [0, 1, 2, 3, 4, 5, 6, 15, 16, 32],  # root -> mouth
+    [6, 7, 8, 9, 10],  # spine3 -> LFoot
+    [6, 11, 12, 13, 14],  # spine3 -> RFoot
+    [0, 17, 18, 19, 20],  # root -> LFootBack
+    [0, 21, 22, 23, 24],  # root -> RFootBack
+    [0, 25, 26, 27, 28, 29, 30, 31],  # root -> Tail
+    [16, 33],  # head -> LEar
+    [16, 34],  # head -> REar
+]
+
+# RLeg1, LLeg1, RLegBack1, LLegBack1
+smal_35_face_joint_indx = [11, 7, 21, 17]
+
+#                    root, LFootBack, RFootBack, head, LFoot, RFoot, Spine3
+smal_key_joint_index = [0,        20,        24,   16,    10,     14,     6]
+
+smal_ee_idx = [24, 20, 16, 14, 10]
 
 SMAL_NAME2ID35 = {
     'root':       0,
@@ -98,9 +129,19 @@ SMAL_NAME2ID35 = {
     'REar':      34,
 }
 
-# RLeg1, LLeg1, RLegBack1, LLegBack1
-smal_35_face_joint_indx = [11, 7, 21, 17]
+smal_symmetry_joint_index = [
+    0, 1, 2, 3, 4, 5, 6,
+    11, 12, 13, 14,  # right leg
+    7, 8, 9, 10,  # left leg
+    15, 16,
+    21, 22, 23, 24,  # right leg back
+    17, 18, 19, 20,  # left leg back
+    25, 26, 27, 28, 29, 30, 31,  # tail
+    32, 34, 33
+]
 
+
+# =================================== DME 28 ==================================
 # deep motion editing with 28 joints
 dme_28_kinematic_chain = [
     [0,           1,  2,  3,  4,  5],  # root -> left leg
@@ -130,6 +171,8 @@ dme_28_ee_idx = [5, 10, 17, 22, 27]
 # right hip, left hip, right shoulder, left shoulder
 dme_28_face_joint_index = [6, 1, 23, 18]
 
+
+# =================================== DME 22 ==================================
 # deep motion editing with 22 joints
 dme_22_kinematic_chain = [
     [0,       1,  2,  3,  4],  # root -> left leg

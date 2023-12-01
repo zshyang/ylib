@@ -6,12 +6,18 @@ logs:
     2023-09-06
         file created
 '''
+import os
+from concurrent.futures import ProcessPoolExecutor
+from typing import List
+
+import cv2
 import imageio
 import numpy as np
 import torch
 import trimesh
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from tqdm import tqdm
 
 from .skeleton_prior import t2m_kinematic_chain
@@ -64,9 +70,31 @@ def set_axes_equal(x_limits, y_limits, z_limits, ax):
     # norm, hence I call half the max range the plot radius.
     plot_radius = 0.5 * max([x_range, y_range, z_range])
 
+    minx = x_limits[0]
+    miny = y_limits[0]
+    minz = z_limits[0]
+    maxx = x_limits[1]
+    maxy = y_limits[1]
+    maxz = z_limits[1]
+
+    # ax.set_xlim3d([minx, maxx])
+    # ax.set_ylim3d([miny, maxy])
+    # ax.set_zlim3d([minz, maxz])
+    # ax.set_box_aspect([maxx - maxx, maxy - miny, maxz - minz])
+
     ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
     ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+
+    verts = [
+        [minx, 0, minz],
+        [minx, 0, maxz],
+        [maxx, 0, maxz],
+        [maxx, 0, minz]
+    ]
+    xz_plane = Poly3DCollection([verts])
+    xz_plane.set_facecolor((0.5, 0.5, 0.5, 0.5))
+    ax.add_collection3d(xz_plane)
 
 
 def draw_skeleton(
@@ -121,7 +149,10 @@ def draw_skeleton(
     return image
 
 
-def draw_skeleton_with_parent(joints, parent, limits=None, y_is_up=True):
+def draw_skeleton_with_parent(
+    joints, parent, limits=None, y_is_up=True,
+    caption: str = '',
+):
     '''
     draw the skeleton with parent
     '''
@@ -134,7 +165,8 @@ def draw_skeleton_with_parent(joints, parent, limits=None, y_is_up=True):
 
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
-    ax.set_title('Skeleton')
+    fig.suptitle(caption, fontsize=10)
+    # ax.set_title('Skeleton')
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
@@ -159,7 +191,9 @@ def draw_skeleton_with_parent(joints, parent, limits=None, y_is_up=True):
     for i, joint in enumerate(trimmed_joints):
         ax.text(joint[0], joint[1], joint[2], f'{i}')
 
-    ax.view_init(elev=100, azim=-90)
+    # ax.view_init(elev=130, azim=-150)
+    ax.view_init(elev=60, azim=150, roll=242)
+    plt.tight_layout()
 
     fig.canvas.draw()
     data = np.frombuffer(
@@ -231,7 +265,7 @@ def batch_draw_skeleton_animation(
 
 def draw_skeleton_animation(
     frame_joints,
-    parent: list,
+    parent: List[int],
     save_gif_path: str = '',
     verbose: bool = False,
     stop_frame: int = -1,
@@ -275,7 +309,142 @@ def draw_skeleton_animation(
     imageio.mimsave(save_gif_path, images)
 
 
+def parallel_draw_skeleton_animation(
+    frame_joints,
+    parent: List[int],
+    save_gif_path: str,
+):
+    '''
+    draw skeleton animation in parallel
+
+    inputs:
+    -------
+    frame_joints: (n_frames, n_joints, 3)
+        joints positions accross frames
+    '''
+    limits = get_limit_from_joints(frame_joints.reshape(-1, 3))
+    cpu_count = os.cpu_count()
+    with ProcessPoolExecutor(max_workers=cpu_count) as executor:
+        images = list(executor.map(
+            draw_skeleton_with_parent,
+            frame_joints,
+            [parent] * len(frame_joints),
+            [limits] * len(frame_joints),
+        ))
+
+    # imageio mp4 way slower but can be open in vscode
+    writer = imageio.get_writer(save_gif_path, fps=24)
+    for image in images:
+        writer.append_data(image)
+    writer.close()
+
+
+def draw_skeleton_animation_ps(
+    list_joint: List[np.ndarray],
+    list_save_gif_path: List[str],
+    parent: List[int],
+):
+    '''
+    draw skeleton animation in parallel.
+    ps stands for parallel and save
+
+    inputs:
+    -------
+    list_joint: List[np.ndarray]
+        each joint with shape (n_frames, n_joints, 3)
+    '''
+    cpu_count = os.cpu_count()
+
+    with ProcessPoolExecutor(max_workers=cpu_count) as executor:
+        executor.map(
+            draw_skeleton_animation,
+            list_joint,
+            [parent] * len(list_joint),
+            list_save_gif_path,
+            [True] * len(list_joint),  # verbose
+        )
+
+
+def draw_skeleton_animation_side_by_side(
+    frame_joints1,
+    frame_joints2,
+    parent1: List[int],
+    parent2: List[int],
+    save_gif_path: str = '',
+    verbose: bool = False,
+    stop_frame: int = -1,
+    caption1: str = '',
+    caption2: str = '',
+):
+    '''
+    draw the skeleton side by side
+    '''
+    images = []
+    limits1 = get_limit_from_joints(frame_joints1.reshape(-1, 3))
+    limits2 = get_limit_from_joints(frame_joints2.reshape(-1, 3))
+
+    if verbose:
+        iterable = tqdm(
+            zip(frame_joints1, frame_joints2),
+            desc=f"generating '{save_gif_path}'",
+        )
+    else:
+        iterable = zip(frame_joints1, frame_joints2)
+
+    for i, (joints1, joints2) in enumerate(iterable):
+
+        joint_image1 = draw_skeleton_with_parent(
+            joints1, parent1, limits=limits1, caption=caption1
+        )
+        joint_image2 = draw_skeleton_with_parent(
+            joints2, parent2, limits=limits2, caption=caption2
+        )
+        joint_image = np.concatenate([joint_image1, joint_image2], axis=1)
+
+        images.append(joint_image)
+
+        if stop_frame > 0 and i == stop_frame:
+            break
+
+    # imageio.mimsave(save_gif_path, images)
+    writer = imageio.get_writer(save_gif_path, fps=24)
+    for image in images:
+        writer.append_data(image)
+    writer.close()
+
+
+def draw_skeleton_animation_sbs_ps(
+    list_joint1: List[np.ndarray],
+    list_joint2: List[np.ndarray],
+    list_parent1: List[int],
+    list_parent2: List[int],
+    list_save_gif_path: List[str],
+    list_caption1: List[str],
+    list_caption2: List[str],
+):
+    '''
+    draw skeleton animation side by side in parallel and save
+    '''
+    cpu_count = os.cpu_count()
+
+    with ProcessPoolExecutor(max_workers=cpu_count) as executor:
+        executor.map(
+            draw_skeleton_animation_side_by_side,
+            list_joint1,
+            list_joint2,
+            list_parent1,
+            list_parent2,
+            list_save_gif_path,
+            [True] * len(list_joint1),  # verbose
+            [-1] * len(list_joint1),  # stop_frame
+            list_caption1,
+            list_caption2,
+        )
+
+
 # ------------------------------ 3D Mesh Drawing ---------------------------- #
+
+
 def find_perpendicular_vectors(unit_direction):
     # Create a candidate vector that is not parallel to unit_direction
     if unit_direction[0] == 0 and unit_direction[1] == 0:

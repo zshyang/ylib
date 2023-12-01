@@ -128,10 +128,12 @@ class SMALModel(nn.Module):
     def __init__(
         self,
         beta: np.ndarray,
-        device: str,
+        device,
         log_betascale: np.ndarray
     ) -> None:
         super(SMALModel, self).__init__()
+
+        self.device = device
 
         # self.beta: [1, 20]
         self.beta = torch.from_numpy(beta).to(device=device)[None]
@@ -206,6 +208,7 @@ class SMALModel(nn.Module):
         self,
         beta: torch.Tensor,
         theta: torch.Tensor,
+        betas_logscale: torch.Tensor,
     ):
         '''
         get joints position
@@ -255,7 +258,7 @@ class SMALModel(nn.Module):
             Rs,
             J,
             self.parents,
-            betas_logscale=self.betas_logscale
+            betas_logscale=betas_logscale
         )
 
         # 5. Do skinning:
