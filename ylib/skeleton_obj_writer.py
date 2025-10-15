@@ -1,31 +1,33 @@
-'''
+"""
 author:
     zhangsihao yang
 
 logs:
     2023-09-06
         file created
-'''
+"""
+
 import os
 from concurrent.futures import ProcessPoolExecutor
 from typing import List
 
-import cv2
+
 import imageio
 import numpy as np
 import torch
 import trimesh
 from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from tqdm import tqdm
 
 from .skeleton_prior import t2m_kinematic_chain
 
 
-# ------------------------------ 2D Image Drawing --------------------------- #
+# ---------------------------------------------------------------------------- #
+# 2D Image Drawing
+# ---------------------------------------------------------------------------- #
 def get_limit_from_joints(joints):
-    '''
+    """
     get the limit of the joints
 
     inputs:
@@ -40,7 +42,7 @@ def get_limit_from_joints(joints):
 
     z_limit: (2,)
 
-    '''
+    """
     assert len(joints.shape) == 2
 
     x_limit = joints[:, 0].min(), joints[:, 0].max()
@@ -86,31 +88,24 @@ def set_axes_equal(x_limits, y_limits, z_limits, ax):
     ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
-    verts = [
-        [minx, 0, minz],
-        [minx, 0, maxz],
-        [maxx, 0, maxz],
-        [maxx, 0, minz]
-    ]
+    verts = [[minx, 0, minz], [minx, 0, maxz], [maxx, 0, maxz], [maxx, 0, minz]]
     xz_plane = Poly3DCollection([verts])
     xz_plane.set_facecolor((0.5, 0.5, 0.5, 0.5))
     ax.add_collection3d(xz_plane)
 
 
-def draw_skeleton(
-    joints, kinematic_chain, limits=None, y_is_up=True
-):
-    ''' Draw the first frame of the motion
+def draw_skeleton(joints, kinematic_chain, limits=None, y_is_up=True):
+    """Draw the first frame of the motion
     # joints: (n_frames, n_joints, 3)
     # kinematic_chain: [[0, 2, 5, 8, 11], [0, 1, 4, 7, 10], ...]
-    '''
+    """
 
     fig = plt.figure(figsize=(8, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.set_title('Skeleton')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
+    ax = fig.add_subplot(111, projection="3d")
+    ax.set_title("Skeleton")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
 
     if limits is None:
         x_limit, y_limit, z_limit = get_limit_from_joints(joints)
@@ -126,19 +121,21 @@ def draw_skeleton(
                 [joints[j1, 0], joints[j2, 0]],
                 [joints[j1, 1], joints[j2, 1]],
                 [joints[j1, 2], joints[j2, 2]],
-                color='b', marker='o', markersize=2, linestyle='-'
+                color="b",
+                marker="o",
+                markersize=2,
+                linestyle="-",
             )
 
     for i, joint in enumerate(joints):
-        ax.text(joint[0], joint[1], joint[2], f'{i}')
+        ax.text(joint[0], joint[1], joint[2], f"{i}")
 
     if y_is_up:
         ax.view_init(elev=100, azim=-90)
 
     # plt.savefig('./preprocess/skeleton.png')
     fig.canvas.draw()
-    data = np.frombuffer(
-        fig.canvas.tostring_rgb(), dtype=np.uint8)  # type: ignore
+    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)  # type: ignore
 
     # Reshape the data into an image
     image = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
@@ -150,26 +147,29 @@ def draw_skeleton(
 
 
 def draw_skeleton_with_parent(
-    joints, parent, limits=None, y_is_up=True,
-    caption: str = '',
+    joints,
+    parent,
+    limits=None,
+    y_is_up=True,
+    caption: str = "",
 ):
-    '''
+    """
     draw the skeleton with parent
-    '''
+    """
     # trimmed_joints: [35, 3]
-    trimmed_joints = joints[:len(parent)]
+    trimmed_joints = joints[: len(parent)]
     # trimmed_joints = trimmed_joints.data.cpu().numpy()
 
     from matplotlib import pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
 
     fig = plt.figure(figsize=(8, 8))
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
     fig.suptitle(caption, fontsize=10)
     # ax.set_title('Skeleton')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
 
     if limits is None:
         x_limit, y_limit, z_limit = get_limit_from_joints(joints)
@@ -185,19 +185,21 @@ def draw_skeleton_with_parent(
             [trimmed_joints[child, 0], trimmed_joints[parent, 0]],
             [trimmed_joints[child, 1], trimmed_joints[parent, 1]],
             [trimmed_joints[child, 2], trimmed_joints[parent, 2]],
-            color='b', marker='o', markersize=2, linestyle='-'
+            color="b",
+            marker="o",
+            markersize=2,
+            linestyle="-",
         )
 
     for i, joint in enumerate(trimmed_joints):
-        ax.text(joint[0], joint[1], joint[2], f'{i}')
+        ax.text(joint[0], joint[1], joint[2], f"{i}")
 
     # ax.view_init(elev=130, azim=-150)
     ax.view_init(elev=60, azim=150, roll=242)
     plt.tight_layout()
 
     fig.canvas.draw()
-    data = np.frombuffer(
-        fig.canvas.tostring_rgb(), dtype=np.uint8)  # type: ignore
+    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)  # type: ignore
 
     # Reshape the data into an image
     image = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
@@ -214,7 +216,7 @@ def batch_draw_skeleton_animation(
     verbose: bool = False,
     stop_frame: int = -1,
 ):
-    '''
+    """
     draw the skeleton
 
     inputs:
@@ -223,7 +225,7 @@ def batch_draw_skeleton_animation(
         joints positions accross frames
     save_gif_path
         the file path to save the gif
-    '''
+    """
     if isinstance(frame_joints, torch.Tensor) and frame_joints.is_cuda:
         frame_joints = frame_joints.detach().data.cpu().numpy()
     elif isinstance(frame_joints, torch.Tensor):
@@ -240,20 +242,17 @@ def batch_draw_skeleton_animation(
 
     if verbose:
         iterable = tqdm(
-            frame_joints.reshape((-1, n_joints, 3)), desc="generating",
+            frame_joints.reshape((-1, n_joints, 3)),
+            desc="generating",
         )
     else:
         iterable = frame_joints.reshape((-1, n_joints, 3))
 
     for i, joints in enumerate(iterable):
         if parent is None:
-            joint_image = draw_skeleton(
-                joints, t2m_kinematic_chain, limits=limits
-            )
+            joint_image = draw_skeleton(joints, t2m_kinematic_chain, limits=limits)
         else:
-            joint_image = draw_skeleton_with_parent(
-                joints, parent, limits=limits
-            )
+            joint_image = draw_skeleton_with_parent(joints, parent, limits=limits)
 
         images.append(joint_image)
 
@@ -266,11 +265,11 @@ def batch_draw_skeleton_animation(
 def draw_skeleton_animation(
     frame_joints,
     parent: List[int],
-    save_gif_path: str = '',
+    save_gif_path: str = "",
     verbose: bool = False,
     stop_frame: int = -1,
 ):
-    '''
+    """
     draw the skeleton
 
     inputs:
@@ -279,27 +278,24 @@ def draw_skeleton_animation(
         joints positions accross frames
     save_gif_path
         the file path to save the gif
-    '''
+    """
     images = []
 
     limits = get_limit_from_joints(frame_joints.reshape(-1, 3))
 
     if verbose:
         iterable = tqdm(
-            frame_joints, desc=f"generating '{save_gif_path}'",
+            frame_joints,
+            desc=f"generating '{save_gif_path}'",
         )
     else:
         iterable = frame_joints
 
     for i, joints in enumerate(iterable):
         if parent is None:
-            joint_image = draw_skeleton(
-                joints, t2m_kinematic_chain, limits=limits
-            )
+            joint_image = draw_skeleton(joints, t2m_kinematic_chain, limits=limits)
         else:
-            joint_image = draw_skeleton_with_parent(
-                joints, parent, limits=limits
-            )
+            joint_image = draw_skeleton_with_parent(joints, parent, limits=limits)
 
         images.append(joint_image)
 
@@ -314,23 +310,25 @@ def parallel_draw_skeleton_animation(
     parent: List[int],
     save_gif_path: str,
 ):
-    '''
+    """
     draw skeleton animation in parallel
 
     inputs:
     -------
     frame_joints: (n_frames, n_joints, 3)
         joints positions accross frames
-    '''
+    """
     limits = get_limit_from_joints(frame_joints.reshape(-1, 3))
     cpu_count = os.cpu_count()
     with ProcessPoolExecutor(max_workers=cpu_count) as executor:
-        images = list(executor.map(
-            draw_skeleton_with_parent,
-            frame_joints,
-            [parent] * len(frame_joints),
-            [limits] * len(frame_joints),
-        ))
+        images = list(
+            executor.map(
+                draw_skeleton_with_parent,
+                frame_joints,
+                [parent] * len(frame_joints),
+                [limits] * len(frame_joints),
+            )
+        )
 
     # imageio mp4 way slower but can be open in vscode
     writer = imageio.get_writer(save_gif_path, fps=24)
@@ -344,7 +342,7 @@ def draw_skeleton_animation_ps(
     list_save_gif_path: List[str],
     parent: List[int],
 ):
-    '''
+    """
     draw skeleton animation in parallel.
     ps stands for parallel and save
 
@@ -352,7 +350,7 @@ def draw_skeleton_animation_ps(
     -------
     list_joint: List[np.ndarray]
         each joint with shape (n_frames, n_joints, 3)
-    '''
+    """
     cpu_count = os.cpu_count()
 
     with ProcessPoolExecutor(max_workers=cpu_count) as executor:
@@ -370,15 +368,15 @@ def draw_skeleton_animation_side_by_side(
     frame_joints2,
     parent1: List[int],
     parent2: List[int],
-    save_gif_path: str = '',
+    save_gif_path: str = "",
     verbose: bool = False,
     stop_frame: int = -1,
-    caption1: str = '',
-    caption2: str = '',
+    caption1: str = "",
+    caption2: str = "",
 ):
-    '''
+    """
     draw the skeleton side by side
-    '''
+    """
     images = []
     limits1 = get_limit_from_joints(frame_joints1.reshape(-1, 3))
     limits2 = get_limit_from_joints(frame_joints2.reshape(-1, 3))
@@ -422,9 +420,9 @@ def draw_skeleton_animation_sbs_ps(
     list_caption1: List[str],
     list_caption2: List[str],
 ):
-    '''
+    """
     draw skeleton animation side by side in parallel and save
-    '''
+    """
     cpu_count = os.cpu_count()
 
     with ProcessPoolExecutor(max_workers=cpu_count) as executor:
@@ -442,9 +440,9 @@ def draw_skeleton_animation_sbs_ps(
         )
 
 
-# ------------------------------ 3D Mesh Drawing ---------------------------- #
-
-
+# ---------------------------------------------------------------------------- #
+# 3D Mesh Drawing
+# ---------------------------------------------------------------------------- #
 def find_perpendicular_vectors(unit_direction):
     # Create a candidate vector that is not parallel to unit_direction
     if unit_direction[0] == 0 and unit_direction[1] == 0:
@@ -522,11 +520,11 @@ def get_box_diagonal_length(joints):
 
 
 def draw_skeleton_obj(joints, parents: list):
-    '''
+    """
     draw the skeleton using trimesh
-    '''
+    """
     # trimmed_joints: [35, 3]
-    trimmed_joints = joints[:len(parents)]
+    trimmed_joints = joints[: len(parents)]
     if isinstance(trimmed_joints, torch.Tensor):
         trimmed_joints = trimmed_joints.data.cpu().numpy()
 
@@ -538,8 +536,7 @@ def draw_skeleton_obj(joints, parents: list):
     list_joints = []
     for joint in trimmed_joints:
         sphere = trimesh.creation.icosphere(  # type: ignore
-            subdivisions=1,
-            radius=base_radius
+            subdivisions=1, radius=base_radius
         )
         sphere.apply_translation(joint)
         list_joints.append(sphere)
